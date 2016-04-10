@@ -13,20 +13,22 @@
 #define DOC_NUM 46972
 #define VOC_NUM 29908
 
-// query
-#define QUESTION_WEIGHT 1
-#define TITLE_WEIGHT 0
-#define CONCEPT_WEIGHT 1.52
-
 // tf-IDF
 #define SMOOTH 1
 #define k 2.7
 #define b 0.985
 
 // Rocchio relevance feedback
-#define RELE_DOC_NUM 7
-#define ALPHA 0.9
-#define BETA 0.021
+#define RELE_DOC_NUM 10
+#define FEEDBACK_TIME 1
+#define ALPHA 0.88
+#define BETA 0.022
+//int rele_array[RELE_DOC_NUM] = {9, 2};
+
+// query
+#define QUESTION_WEIGHT 1
+#define TITLE_WEIGHT 0
+#define CONCEPT_WEIGHT 1.49
 
 // k = 2.23, b = 1.02, no Roccico, 0.795256298517
 // k = 2.23, b = 1.01, no Roccico, 0.795294513996
@@ -91,16 +93,84 @@
 	// question = 1, concept = 1.65, 0.814938282616
 	// question = 1, concept = 1.75, 0.814753912566
 	// question = 1, concept = 2, 0.811995895035
-	
+
+// RELE_DOC_NUM = 7, question = 1, concept = 1.52, 0.816499094678
+	// RELE_DOC_NUM = 2, 
+	// RELE_DOC_NUM = 3, 0.814427737837
+	// RELE_DOC_NUM = 4, 0.814957255092
+	// RELE_DOC_NUM = 5, 0.815372636824
+	// RELE_DOC_NUM = 6, 0.816138832465
+	// RELE_DOC_NUM = 8, 0.81630219745
+	// RELE_DOC_NUM = 9, 0.816694429713
+	// RELE_DOC_NUM = 10, 0.815894029093
+	// RELE_DOC_NUM = 12, 0.816426887147
+	// RELE_DOC_NUM = 15, 0.816101186203
+	// RELE_DOC_NUM = 100, 0.813241597084
+// FEEDBACK_TIME = 2, RELE_DOC_NUM = 7, 0.812589745975
+// FEEDBACK_TIME = 2, RELE_DOC_NUM = 5, 0.81310580561
+// FEEDBACK_TIME = [9,2], 0.807897422279
+
+// k = 2.7, b = 0.985, alpha 0.9, beta 0.021, concept = 1.52, 0.816694429713
+	// question = 1, concept = 1.51, 0.81658067918
+	// question = 1, concept = 1.505, 0.816650712726
+	// question = 1, concept = 1.502, 0.816682958848
+	// question = 1, concept = 1.5, 0.816706006162
+	// question = 1, concept = 1.495, 0.816734709513
+	// question = 1, concept = 1.494, 0.816738457569
+	// question = 1, concept = 1.493, 0.816738457569
+	// question = 1, concept = 1.492, 0.816474865769
+	// question = 1, concept = 1.491, 0.816474865769
+	// question = 1, concept = 1.49, 0.816500418919
+	// question = 1, concept = 1.48, 0.816416319236 
+	// question = 1, concept = 1.45, 0.816379256514
+
+//ELE_DOC_NUM = 9, concept = 1.494, 0.816738457569
+	//ELE_DOC_NUM = 14, 0.816298865718
+	//ELE_DOC_NUM = 13, 0.816298865718
+	//ELE_DOC_NUM = 12, 0.816379755488
+	//ELE_DOC_NUM = 11, 0.816229608166
+	//ELE_DOC_NUM = 10, 0.81680585443
+	//ELE_DOC_NUM = 8, 0.816719710033
+	//ELE_DOC_NUM = 7, 0.816254287887
+	//ELE_DOC_NUM = 6, 0.816095519249
+	//ELE_DOC_NUM = 5, 0.815314128892
+
+// question = 1, concept = 1.494, 0.81680585443
+	// question = 1, concept = 1.49, 0.816808701894
+	// question = 1, concept = 1.492, 0.816800796158
+	// question = 1, concept = 1.5, 0.816565965341
+	// question = 1, concept = 1.51, 0.816406899717
+
+//ELE_DOC_NUM = 10, concept = 1.49, 0.816808701894
+	//ELE_DOC_NUM = 9, 0.816500418919
+	//ELE_DOC_NUM = 8, 0.816743221005
+	//ELE_DOC_NUM = 7, 0.816268846471
+	//ELE_DOC_NUM = 6, 0.816100498447
+	//ELE_DOC_NUM = 11, 0.816265624349 
+	//ELE_DOC_NUM = 12, 0.816384909064
+	//ELE_DOC_NUM = 13, 0.816365426726
+	//ELE_DOC_NUM = 14, 0.816377971055
+
+//beta = 0.021, 0.816808701894
+	//beta = 0.02, 0.816782939603
+	//beta = 0.022, 0.816817356032
+	//beta = 0.023, 0.816624910587
+	//beta = 0.024, 0.81644078801
+
+//alpha = 0.9, beta = 0.022, 0.816817356032
+	//alpha = 0.89, 0.816800168338
+	//alpha = 0.88, 0.816822615027
+	//alpha = 0.87, 0.816822615027
+	//alpha = 0.86, 0.816624910587
 
 typedef struct {
-	int vocab1;				// first vocabulary
-	int vocab2;				// second vocabulary
-	double tf;				// term frequency in this doc
-	double tf_normalize;	// Okapi / BM25
-	double df; 				// document frequence of the term
-	double weight;			// tf-IDF
-	double relevance_doc_vector; 		// use to calculate the relevance in relevance feedback 
+	int vocab1;						// first vocabulary
+	int vocab2;						// second vocabulary
+	double tf;						// term frequency in this doc
+	double tf_normalize;			// Okapi / BM25
+	double df; 						// document frequence of the term
+	double weight;					// tf-IDF
+	double relevance_doc_vector;	// use to calculate the relevance in relevance feedback 
 } _Term;
 
 typedef struct {
@@ -155,12 +225,27 @@ void cut_query(wchar_t* question_buffer) {	//0.813607310423
 		*useless = L'\0';
 		wcscat(question_buffer, useless+1);
 	}
+	useless = wcsstr(question_buffer, L"及");  //no 0.816694429713
+	if (useless != NULL) {
+		*useless = L'\0';
+		wcscat(question_buffer, useless+1);
+	}
+	// useless = wcsstr(question_buffer, L"的");  //decrease
+	// if (useless != NULL) {
+	// 	*useless = L'\0';
+	// 	wcscat(question_buffer, useless+1);
+	// }
 	// useless = wcsstr(question_buffer, L"所");  //decrease 0.810578884383
 	// if (useless != NULL) {
 	// 	*useless = L'\0';
 	// 	wcscat(question_buffer, useless+1);
 	// }
 	useless = wcschr(question_buffer, L'，');
+	if (useless != NULL) {
+		*useless = L'\0';
+		wcscat(question_buffer, useless+1);
+	}
+	useless = wcschr(question_buffer, L'、');  //no 0.816694429713
 	if (useless != NULL) {
 		*useless = L'\0';
 		wcscat(question_buffer, useless+1);
@@ -570,73 +655,73 @@ int main(int argc, char** argv) {
 		generateTop(doc, top);
 
 		//if relevance feeback is specified
-		if (relevance_feedback) {
-			int p1, p2;
-			for (i = 0; i < RELE_DOC_NUM; i++) {
-				p1 = 0;
-				p2 = 0;
-
-				// count relevance_doc_vector
-				// find same terms that appear both in query and its top <RELE_DOC_NUM> documents
-				while (p1 < doc[top[i]].current_term && p2 < query[q].current_term) {
-					if (doc[top[i]].term[p1].vocab1 > query[q].term[p2].vocab1)
-						p2++;
-					else if (doc[top[i]].term[p1].vocab1 < query[q].term[p2].vocab1)
-						p1++;
-					else {
-						if (doc[top[i]].term[p1].vocab2 > query[q].term[p2].vocab2)
+		for (j = 0; j < FEEDBACK_TIME; j ++) {
+			if (relevance_feedback) {
+				int p1, p2;
+				for (i = 0; i < RELE_DOC_NUM; i++) {
+					p1 = 0;
+					p2 = 0;
+					// count relevance_doc_vector
+					// find same terms that appear both in query and its top <RELE_DOC_NUM> documents
+					while (p1 < doc[top[i]].current_term && p2 < query[q].current_term) {
+						if (doc[top[i]].term[p1].vocab1 > query[q].term[p2].vocab1)
 							p2++;
-						else if (doc[top[i]].term[p1].vocab2 < query[q].term[p2].vocab2)
+						else if (doc[top[i]].term[p1].vocab1 < query[q].term[p2].vocab1)
 							p1++;
-						// else if (doc[top[i]].term[p1].vocab2 == -1 && query[q].term[p2].vocab2 == -1) {	// no unigram
-						// 	p1++;
-						// 	p2++;
-						// }
 						else {
-							double w = 1;
-							// good term, add its weight to relevance
-							query[q].term[p2].relevance_doc_vector += doc[top[i]].term[p1].weight * w;
-							//query[q].term[p2].relevance_doc_vector += query[q].term[p2].tf * w;
-							p1++;
-							p2++;
+							if (doc[top[i]].term[p1].vocab2 > query[q].term[p2].vocab2)
+								p2++;
+							else if (doc[top[i]].term[p1].vocab2 < query[q].term[p2].vocab2)
+								p1++;
+							// else if (doc[top[i]].term[p1].vocab2 == -1 && query[q].term[p2].vocab2 == -1) {	// no unigram
+							// 	p1++;
+							// 	p2++;
+							// }
+							else {
+								double w = 1;
+								// good term, add its weight to relevance
+								query[q].term[p2].relevance_doc_vector += doc[top[i]].term[p1].weight * w;
+								//query[q].term[p2].relevance_doc_vector += query[q].term[p2].tf * w;
+								p1++;
+								p2++;
+							}
 						}
 					}
 				}
-			}
-			for (i = 0; i < DOC_NUM; i++) {
-				p1 = 0;
-				p2 = 0;
-				doc[i].dot_product = 0;
-				doc[i].cosine_amount1 = 0;
-				doc[i].cosine_amount2 = 0;
-				doc[i].dirty_bit = 0;
-				while (p1 < doc[i].current_term && p2 < query[q].current_term) {
-					if (doc[i].term[p1].vocab1 > query[q].term[p2].vocab1)
-						p2++;
-					else if (doc[i].term[p1].vocab1 < query[q].term[p2].vocab1)
-						p1++;
-					else {
-						if (doc[i].term[p1].vocab2 > query[q].term[p2].vocab2)
+				for (i = 0; i < DOC_NUM; i++) {
+					p1 = 0;
+					p2 = 0;
+					doc[i].dot_product = 0;
+					doc[i].cosine_amount1 = 0;
+					doc[i].cosine_amount2 = 0;
+					doc[i].dirty_bit = 0;
+					while (p1 < doc[i].current_term && p2 < query[q].current_term) {
+						if (doc[i].term[p1].vocab1 > query[q].term[p2].vocab1)
 							p2++;
-						else if (doc[i].term[p1].vocab2 < query[q].term[p2].vocab2)
+						else if (doc[i].term[p1].vocab1 < query[q].term[p2].vocab1)
 							p1++;
-						// else if (doc[i].term[p1].vocab2 == -1 && query[q].term[p2].vocab2 == -1) {	// no unigram
-						// 	p1++;
-						// 	p2++;
-						// }
 						else {
-							doc[i].dot_product += count_relevance_feedback_dot_product(doc[i].term[p1].weight, query[q].term[p2].tf, query[q].term[p2].relevance_doc_vector);
-							p1++;
-							p2++;
+							if (doc[i].term[p1].vocab2 > query[q].term[p2].vocab2)
+								p2++;
+							else if (doc[i].term[p1].vocab2 < query[q].term[p2].vocab2)
+								p1++;
+							// else if (doc[i].term[p1].vocab2 == -1 && query[q].term[p2].vocab2 == -1) {	// no unigram
+							// 	p1++;
+							// 	p2++;
+							// }
+							else {
+								doc[i].dot_product += count_relevance_feedback_dot_product(doc[i].term[p1].weight, query[q].term[p2].tf, query[q].term[p2].relevance_doc_vector);
+								p1++;
+								p2++;
+							}
 						}
 					}
+					// count cosine similarity of document i to query q
+					do_cosine(doc, query, i, q, 0);
 				}
-				// count cosine similarity of document i to query q
-				do_cosine(doc, query, i, q, 0);
+				// generate top 100 anwser for each query//
+				generateTop(doc, top);
 			}
-
-			// generate top 100 anwser for each query//
-			generateTop(doc, top);
 		}
 
 		// print top100 into output

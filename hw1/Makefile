@@ -8,6 +8,9 @@ run:
 diff:
 	diff ranked-list ranked-list2
 
+copy:
+	cp ranked-list ranked-list2
+
 time:
 	time ./execute.sh -r -i query-test.xml -o ranked-list2 -m model -d CIRB010
 	cat ranked-list2 | head -1908 > ranked-list5
