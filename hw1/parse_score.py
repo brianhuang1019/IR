@@ -12,6 +12,9 @@ import re
 print "ID:", sys.argv[1], '\n'
 
 score = -1
+upload_time = ""
+number = -1
+
 while True:
 
 	soup = BeautifulSoup(urllib2.urlopen('http://wm.csie.ntu.edu.tw/wm2016hw1/'))
@@ -20,11 +23,13 @@ while True:
 	for row in tr:
 		tds = row.findAll('td')
 		if len(tds) >= 3 and str(tds[1]).find(sys.argv[1]) > -1:
-			if score != re.findall("[-+]?\d+[\.]?\d*", str(tds[3]))[0]:
+			if upload_time != str(re.findall("[-\d]+[ ]+[:\d]+", str(tds[2]))[0]):
 				score = re.findall("[-+]?\d+[\.]?\d*", str(tds[3]))[0]
-				print "No.", re.findall("[-+]?\d+[\.]?\d*", str(tds[0]))[0], "/", len(tr)
-				print "Score:", re.findall("[-+]?\d+[\.]?\d*", str(tds[3]))[0]
-				print "Upload Time:", re.findall("[-\d]+[ ]+[:\d]+", str(tds[2]))[0]
-				print "Current Time:", datetime.now().strftime('%Y-%m-%d %H:%M:%S'), '\n'
-
-	time.sleep(10)
+				upload_time = str(re.findall("[-\d]+[ ]+[:\d]+", str(tds[2]))[0])
+				number = re.findall("[-+]?\d+[\.]?\d*", str(tds[0]))[0]
+				print >> sys.stderr, "\r",
+				print "No.", number, "/", len(tr), "                      "
+				print "Score:", score
+				print "Upload Time:", upload_time + '\n'
+	print >> sys.stderr, "\rCurrent Time:", datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+	time.sleep(3)

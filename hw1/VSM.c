@@ -7,10 +7,16 @@
 //#include <ctype.h>
 #include <locale.h>
 
+#define TOP_ANSWER_NUM 100
 #define DOCUMENT_NUM 50000
 #define VOCAB_NUM 30000
 #define DOC_NUM 46972
 #define VOC_NUM 29908
+
+// query
+#define QUESTION_WEIGHT 1
+#define TITLE_WEIGHT 0
+#define CONCEPT_WEIGHT 1.52
 
 // tf-IDF
 #define SMOOTH 1
@@ -56,7 +62,8 @@
 	// k = 2.75, b = 0.985, ALPHA = 0.90, BETA = 0.02, 0.808801022588
 	// k = 2.75, b = 0.985, ALPHA = 0.90, BETA = 0.018, 0.808738330526
 
-// RELE_DOC_NUM = 2, k = 2.75, b = 0.985, ALPHA = 0.90, BETA = 0.021, 0.808929322404
+// k = 2.75, b = 0.985, ALPHA = 0.90, BETA = 0.021
+	// RELE_DOC_NUM = 2, 0.808929322404
 	// RELE_DOC_NUM = 3, 0.810780039908
 	// RELE_DOC_NUM = 4, 0.81159137397
 	// RELE_DOC_NUM = 5, 0.810696393829
@@ -66,6 +73,25 @@
 	// RELE_DOC_NUM = 9, 0.811318102076
 	// RELE_DOC_NUM = 15, 0.811321134563
 	// RELE_DOC_NUM = 100, 0.80664257293
+	// delete 以及、與 0.813867976885
+
+// first time count cosine with unigram, relevance count cosine just bigram: 0.814336049169
+	// question = 1, concept = 1.25, 0.814851901447
+	// question = 1, concept = 1.4, 0.816231560436
+	// question = 1, concept = 1.5, 0.816249433169
+	// question = 1, concept = 1.51, 0.816345307673
+	// question = 1, concept = 1.515, 0.816345307673
+	// question = 1, concept = 1.5175, 0.816499094678
+	// question = 1, concept = 1.5185, 0.816499094678
+	// question = 1, concept = 1.52, 0.816499094678
+	// question = 1, concept = 1.525, 0.8164974181
+	// question = 1, concept = 1.53, 0.816455313982
+	// question = 1, concept = 1.55, 0.815925198518
+	// question = 1, concept = 1.6, 0.815338391417
+	// question = 1, concept = 1.65, 0.814938282616
+	// question = 1, concept = 1.75, 0.814753912566
+	// question = 1, concept = 2, 0.811995895035
+	
 
 typedef struct {
 	int vocab1;				// first vocabulary
@@ -82,16 +108,91 @@ typedef struct {
 	int max_term;
 	int current_term;
 	_Term* term;
-	double similarity;		// dot product of doc & query
+	double dot_product;		// dot product of doc & query
 	double cosine_amount1;
 	double cosine_amount2;
-	double cosine;
+	double cosine;			// cosine similarity
 	int dirty_bit;
 } _Document;
 
 wchar_t vocab[VOCAB_NUM][100]; 		// total vocab number with length maximum 100
 _Document doc[DOCUMENT_NUM]; 		// total document number
 _Document *query; 					// query document
+
+void parseXMLContent(FILE *fp, wchar_t* buffer) {
+	wchar_t tmp[200];
+	fwscanf(fp, L"%ls", &tmp);
+	wchar_t *start = wcschr(tmp, L'>');
+	start++;
+	wchar_t *end = wcschr(tmp, L'<');
+	*end = L'\0';
+	wcscpy(buffer, start);
+}
+
+// cut off useless words in query
+void cut_query(wchar_t* question_buffer) {	//0.813607310423
+	wchar_t *useless;
+	useless = wcsstr(question_buffer, L"查詢");
+	if (useless != NULL)
+		wcscpy(question_buffer, useless+2);
+	useless = wcsstr(question_buffer, L"有關");
+	if (useless != NULL) {
+		*useless = L'\0';
+		wcscat(question_buffer, useless+2);
+	}
+	useless = wcsstr(question_buffer, L"以及"); //increase 0.811051727367
+	if (useless != NULL) {
+		*useless = L'\0';
+		wcscat(question_buffer, useless+2);
+	}
+	// useless = wcsstr(question_buffer, L"之");	//decrease 0.810791060904
+	// if (useless != NULL) {
+	// 	*useless = L'\0';
+	// 	wcscat(question_buffer, useless+1);
+	// }
+	useless = wcsstr(question_buffer, L"與");  //increase 0.811013283126
+	if (useless != NULL) {
+		*useless = L'\0';
+		wcscat(question_buffer, useless+1);
+	}
+	// useless = wcsstr(question_buffer, L"所");  //decrease 0.810578884383
+	// if (useless != NULL) {
+	// 	*useless = L'\0';
+	// 	wcscat(question_buffer, useless+1);
+	// }
+	useless = wcschr(question_buffer, L'，');
+	if (useless != NULL) {
+		*useless = L'\0';
+		wcscat(question_buffer, useless+1);
+	}
+	useless = wcschr(question_buffer, L'。');
+	if (useless != NULL) {
+		*useless = L'\0';
+	}
+}
+
+void add2Query(_Document *query, int query_index, int voc1, int voc2, double rate) {
+	// find repeat _Term, avoid puting same term into query document
+	int i;
+	for (i = 0; i < query[query_index].current_term; i++) {
+		if (query[query_index].term[i].vocab1 == voc1 && query[query_index].term[i].vocab2 == voc2) {
+			//printf(" [!] size: %d, i: %d\n", query[query_index].current_term, i);
+			if (query[query_index].term[i].tf <= 0)
+				query[query_index].term[i].tf = rate;
+			else
+				query[query_index].term[i].tf += rate;
+			break;
+		}
+	}
+
+	// if not repeat, put this term into set
+	if (i == query[query_index].current_term) {
+		query[query_index].term[query[query_index].current_term].vocab1 = voc1;
+		query[query_index].term[query[query_index].current_term].vocab2 = voc2;
+		query[query_index].term[query[query_index].current_term].tf = rate;
+		query[query_index].current_term += 1;
+	}
+}
 
 int compare (const void *a1, const void *a2) {
 	_Term *term1 = (_Term*)a1;
@@ -116,44 +217,65 @@ double count_TF(double term_frequency, int current_term, double avgdoclen) {
 	return (k + 1) * term_frequency / (term_frequency + k * (1 - b + b * current_term / avgdoclen));
 }
 
-double count_similarity(double doc_term_weight, double query_term_weight) {
+// dot product
+double count_dot_product(double doc_term_weight, double query_term_weight) {
 	return doc_term_weight * query_term_weight * SMOOTH;
 }
 
-double count_relevance_feedback_similarity(double doc_term_weight, double query_term_weight, double query_term_relevance) {
+// dot product, query reweight with Rocchio relevance feedback
+double count_relevance_feedback_dot_product(double doc_term_weight, double query_term_weight, double query_term_relevance) {
 	return doc_term_weight * (ALPHA * query_term_weight + BETA * query_term_relevance / RELE_DOC_NUM);
 }
 
-double count_cosine(double similarity, double cos1, double cos2) {
-	return similarity / (sqrt(cos1) * sqrt(cos2));
+double count_cosine(double dot_product, double cos1, double cos2) {
+	return dot_product / (sqrt(cos1) * sqrt(cos2));
 }
 
-// cut off useless words in query
-void cut_query(wchar_t* query_buffer) {
-	wchar_t *useless;
-	useless = wcsstr(query_buffer, L"查詢");
-	if (useless != NULL)
-		wcscpy(query_buffer, useless+2);
-	useless = wcsstr(query_buffer, L"有關");
-	if (useless != NULL) {
-		*useless = L'\0';
-		wcscat(query_buffer, useless+2);
+void do_cosine(_Document *doc, _Document *query, int docID, int queryID, int use_unigram) {
+	int p1 = 0;
+	int p2 = 0;
+	while (p1 < doc[docID].current_term) {
+		if (use_unigram)
+			doc[docID].cosine_amount1 += doc[docID].term[p1].weight * doc[docID].term[p1].weight;
+		else	// no unigram
+			if (doc[docID].term[p1].vocab2 != -1)
+				doc[docID].cosine_amount1 += doc[docID].term[p1].weight * doc[docID].term[p1].weight;
+		p1++;
 	}
-	useless = wcschr(query_buffer, L'，');
-	if (useless != NULL) {
-		*useless = L'\0';
-		wcscat(query_buffer, useless+1);
+	while (p2 < query[queryID].current_term) {
+		if (use_unigram)
+			doc[docID].cosine_amount2 += query[queryID].term[p2].tf * query[queryID].term[p2].tf;
+		else	// no unigram
+			if (query[queryID].term[p2].vocab2 != -1)
+				doc[docID].cosine_amount2 += query[queryID].term[p2].tf * query[queryID].term[p2].tf;
+		p2++;
 	}
-	useless = wcschr(query_buffer, L'。');
-	if (useless != NULL) {
-		*useless = L'\0';
+	if (doc[docID].cosine_amount1 != 0 && doc[docID].cosine_amount2 != 0)
+		doc[docID].cosine = count_cosine(doc[docID].dot_product, doc[docID].cosine_amount1, doc[docID].cosine_amount2);
+	else
+		doc[docID].cosine = 0;
+}
+
+void generateTop(_Document *doc, int *top) {
+	double max;
+	int i, j;
+	for (i = 0; i < TOP_ANSWER_NUM; i++) {
+		max = 0;
+		for (j = 0; j < DOC_NUM; j++) {
+			if (max < doc[j].cosine && doc[j].dirty_bit == 0) {
+				max = doc[j].cosine;
+				top[i] = j;
+			}
+		}
+		// set dirty bit
+		doc[top[i]].dirty_bit = 1;
 	}
 }
 
 int main(int argc, char** argv) {
 	setlocale(LC_ALL, "zh_TW.UTF-8");
-	int i = 0, j = 0;
 
+	int i = 0, j = 0;
 	int default_query_num = 30;
 	int relevance_feedback = 0;
 	char query_file[50];
@@ -171,18 +293,18 @@ int main(int argc, char** argv) {
 	// process input parameters
 	while (i < argc) {
 		if(strcmp(argv[i], "-r") == 0) {
-			relevance_feedback = 1; // open relevance feedback
+			relevance_feedback = 1; 			// open relevance feedback
 		}
-		else if(strcmp(argv[i], "-i") == 0) { //specify query file
+		else if(strcmp(argv[i], "-i") == 0) {	//specify query file
 			strcpy(query_file,argv[++i]);
 		}
-		else if(strcmp(argv[i], "-o") == 0) { //specify output file
+		else if(strcmp(argv[i], "-o") == 0) {	//specify output file
 			strcpy(output_file,argv[++i]);
 		}
-		else if(strcmp(argv[i], "-m") == 0) { //specify modle directory
+		else if(strcmp(argv[i], "-m") == 0) {	//specify modle directory
 			strcpy(model_dir,argv[++i]);
 		}
-		else if(strcmp(argv[i], "-d") == 0) { //specify NTCIR directory
+		else if(strcmp(argv[i], "-d") == 0) {	//specify NTCIR directory
 			strcpy(NTCIR_dir,argv[++i]);
 		}
 		else {
@@ -254,13 +376,13 @@ int main(int argc, char** argv) {
 	// pasre XML query
 	wchar_t c, cn;
 	int query_index, query_num = 0;
-	wchar_t narr_buffer[1000], query_buffer[200], tmp_buffer[1000];
+	wchar_t question_buffer[200], title_buffer[200], narrative_buffer[1000];
 	while ((c = fgetwc(query_file_fp)) != EOF) {
 		if (c == L'<') {
 			c = fgetwc(query_file_fp);
-			if (c == L'n') {
+			if (c == L'n') {	// <number>
 				c = fgetwc(query_file_fp);
-				if (c == L'u') {	// <number>
+				if (c == L'u') {
 					query_num += 1;
 					query_index = query_num - 1;
 					if (query_num > default_query_num) {
@@ -271,68 +393,63 @@ int main(int argc, char** argv) {
 					query[query_index].current_term = 0;
 					query[query_index].term = malloc(sizeof(_Term) * 30000);
 
-					// parse query name
-					wchar_t buffer[100];
-					fwscanf(query_file_fp, L"%ls", &buffer);
-					wchar_t *name_start = wcschr(buffer, L'>');
-					name_start++;
-					wchar_t *name_end = wcschr(buffer, L'<');
-					*name_end = L'\0';
-					wcscpy(query[query_index].doc_ID, name_start);
+					// parse query number
+					parseXMLContent(query_file_fp, query[query_index].doc_ID);
 				}	
 			}
+			// else if (c == L't') {	// <title>
+			// 	c = fgetwc(query_file_fp);
+			// 	if (c == L'i') {
+			// 		// parse title
+			// 		parseXMLContent(query_file_fp, title_buffer);
+
+			// 		int v1, v2;
+			// 		for (i = 0; i < wcslen(title_buffer) - 1; i++) {
+			// 			for (j = 0; j < VOC_NUM; j++) {
+			// 				if (vocab[j][0] == title_buffer[i])
+			// 					break;	
+			// 			}
+			// 			v1 = j;
+			// 			for (j = 0; j < VOC_NUM; j++) {
+			// 				if(vocab[j][0] == title_buffer[i+1])
+			// 					break;	
+			// 			}
+			// 			v2 = j;
+
+			// 			add2Query(query, query_index, v1, v2, TITLE_WEIGHT);
+			// 		}
+			// 	}	
+			// }
 			else if (c == L'q') {	// <question>
 				c = fgetwc(query_file_fp);
 				if (c == L'u') {
 					while ((c = fgetwc(query_file_fp)) != L'\n');
-					fwscanf(query_file_fp, L"%ls", &query_buffer);
-					// cut useless words in query
-					cut_query(query_buffer);
-					// wprintf(L"%ls\n", query_buffer);
+					fwscanf(query_file_fp, L"%ls", &question_buffer);
 
+					// cut useless words in query
+					cut_query(question_buffer);
+
+					// add term to query
 					int v1, v2;
-					for (i = 0; i < wcslen(query_buffer) - 1; i++) {
+					for (i = 0; i < wcslen(question_buffer) - 1; i++) {
 						for (j = 0; j < VOC_NUM; j++) {
-							if (vocab[j][0] == query_buffer[i])
+							if (vocab[j][0] == question_buffer[i])
 								break;	
 						}
 						v1 = j;
 						for (j = 0; j < VOC_NUM; j++) {
-							if(vocab[j][0] == query_buffer[i+1])
+							if(vocab[j][0] == question_buffer[i+1])
 								break;	
 						}
 						v2 = j;
-						//wprintf(L"%lc", vocab[v1][0]);
-						//wprintf(L"%lc\n", vocab[v2][0]);
 
-						// find repeat _Term, avoid puting same term into query document
-						for (j = 0; j < query[query_index].current_term; j++) {
-							if (query[query_index].term[j].vocab1 == v1 && query[query_index].term[j].vocab2 == v2) {
-								//printf(" [!] size: %d, j: %d\n", query[query_index].current_term, j);
-								if (query[query_index].term[j].tf <= 0)
-									query[query_index].term[j].tf = 1;
-								else
-									query[query_index].term[j].tf += 1;
-								break;
-							}
-						}
-						//printf("size: %d, j: %d\n", query[query_index].current_term, j);
-
-						// if not repeat, put this term into set
-						if (j == query[query_index].current_term) {
-							query[query_index].term[query[query_index].current_term].vocab1 = v1;
-							query[query_index].term[query[query_index].current_term].vocab2 = v2;
-							query[query_index].term[query[query_index].current_term].tf = 1;
-							query[query_index].current_term += 1;
-						}
+						add2Query(query, query_index, v1, v2, QUESTION_WEIGHT);
 					}
-					// for (i = 0; i < query[query_index].current_term; i++)
-					// 	printf("i: %d, tf: %lf\n", i, query[query_index].term[i].tf);
 				}
 			}
-			else if (c == L'c') {
+			else if (c == L'c') {	// <concept>
 				c = fgetwc(query_file_fp);
-				if (c == L'o') {	// <concept>
+				if (c == L'o') {
 					while ((c = fgetwc(query_file_fp)) != L'\n');
 					while ((c = fgetwc(query_file_fp)) != L'<') {
 						cn = fgetwc(query_file_fp);
@@ -340,42 +457,20 @@ int main(int argc, char** argv) {
 						if (c == L'、' || c == L'。' || c == L'<' || cn == L'<')
 							continue;
 
+						// add term to query
 						int v1, v2;
 						for (i = 0; i < VOC_NUM; i++)
 							if (vocab[i][0] == c)
 								break;
 						v1 = i;
-
 						for (i = 0; i < VOC_NUM; i++)
 							if (vocab[i][0] == cn)
 								break;
-
 						if (cn == L'、' || cn == L'。')
 							v2 = -1;
 						else
 							v2 = i;
-
-						// find repeat _Term, avoid puting same term into query document
-						for (i = 0; i < query[query_index].current_term; i++) {
-							if (query[query_index].term[i].vocab1 == v1 && query[query_index].term[i].vocab2 == v2) {
-								if(query[query_index].term[i].tf<=0)
-									query[query_index].term[i].tf = 1;
-								else
-									query[query_index].term[i].tf += 1;
-								break;
-							}
-						}
-
-						// if not repeat, put this term into set
-						if (i == query[query_index].current_term) {
-							query[query_index].term[query[query_index].current_term].vocab1 = v1;
-							query[query_index].term[query[query_index].current_term].vocab2 = v2;
-							query[query_index].term[query[query_index].current_term].tf = 1;
-							query[query_index].term[query[query_index].current_term].relevance_doc_vector = 0;
-							query[query_index].current_term += 1;
-							//printf("%d %d\n",v1,v2);
-						}
-						//wprintf(L"%lc %lc %d %d\n",c,cn,v1,v2);
+						add2Query(query, query_index, v1, v2, CONCEPT_WEIGHT);
 					}
 				}
 			}
@@ -384,9 +479,8 @@ int main(int argc, char** argv) {
 	fclose(query_file_fp);
 
 	// sort _Term in query by voc ID
-	for (i = 0; i < query_num; i++) {
+	for (i = 0; i < query_num; i++)
 		qsort(query[i].term, query[i].current_term, sizeof(_Term), compare);
-	}
 	printf(" [O] Parsing query-file finish\n");
 
 	// parse inverted-file
@@ -413,9 +507,8 @@ int main(int argc, char** argv) {
 
 	// calculate average document length
 	double avgdoclen = 0;
-	for (i = 0; i < DOC_NUM; i++) {
+	for (i = 0; i < DOC_NUM; i++)
 		avgdoclen += doc[i].current_term;
-	}
 	avgdoclen = avgdoclen / DOC_NUM;
 	printf(" [O] Calculate avgdoclen finish, it equals to: %lf\n", avgdoclen);
 
@@ -426,13 +519,13 @@ int main(int argc, char** argv) {
 			doc[i].term[j].weight = count_IDF(doc[i].term[j].df) * doc[i].term[j].tf_normalize;
 		}
 	}
+
 	// sort _Term in doc by voc ID
-	for (i = 0; i < DOC_NUM; i++) {
+	for (i = 0; i < DOC_NUM; i++)
 		qsort(doc[i].term, doc[i].current_term, sizeof(_Term), compare);
-	}
 	printf(" [O] Calculate term weight using tf-IDF finish\n");
 
-	// calculate similarity with each query file//
+	// calculate dot_product with each query file
 	int q;
 	for (q = 0; q < query_num; q++) {
 		// use method in HW1 to find same vocab
@@ -440,7 +533,7 @@ int main(int argc, char** argv) {
 		for (i = 0; i < DOC_NUM; i++) {
 			p1 = 0;
 			p2 = 0;
-			doc[i].similarity = 0;
+			doc[i].dot_product = 0;
 			doc[i].cosine_amount1 = 0;
 			doc[i].cosine_amount2 = 0;
 			doc[i].dirty_bit = 0;	// in order to be faster in ranking
@@ -459,48 +552,22 @@ int main(int argc, char** argv) {
 					// 	p2++;
 					// }
 					else {
-						doc[i].similarity += count_similarity(doc[i].term[p1].weight, query[q].term[p2].tf);
-						//doc[i].similarity += (doc[i].term[p1].weight * query[q].term[p2].tf * SMOOTH);
-						//doc[i].similarity += (doc[i].term[p1].weight * query[q].term[p2].weight * SMOOTH);
+						doc[i].dot_product += count_dot_product(doc[i].term[p1].weight, query[q].term[p2].tf);
+						//doc[i].dot_product += (doc[i].term[p1].weight * query[q].term[p2].tf * SMOOTH);
+						//doc[i].dot_product += (doc[i].term[p1].weight * query[q].term[p2].weight * SMOOTH);
 						p1++;
 						p2++;
 					}
 				}
 			}
-			p1 = 0;
-			p2 = 0;
-			while (p1 < doc[i].current_term) {
-				if (doc[i].term[p1].vocab2 != -1) {	// no unigram
-					doc[i].cosine_amount1 += doc[i].term[p1].weight * doc[i].term[p1].weight;
-				}
-				p1++;
-			}
-			while (p2 < query[q].current_term) {
-				if (query[q].term[p2].vocab2 != -1) {	// no unigram
-					doc[i].cosine_amount2 += query[q].term[p2].tf * query[q].term[p2].tf;
-				}
-				p2++;
-			}
-			if (doc[i].cosine_amount1 != 0 && doc[i].cosine_amount2 != 0)
-				doc[i].cosine = count_cosine(doc[i].similarity, doc[i].cosine_amount1, doc[i].cosine_amount2);
-			else
-				doc[i].cosine = 0;
+
+			// count cosine similarity of document i to query q
+			do_cosine(doc, query, i, q, 1);
 		}
 
 		// generate top 100 anwser for each query//
 		int top[100];
-		double maximal;
-		for (i = 0; i < 100; i++) {
-			maximal = 0;
-			for (j = 0; j < DOC_NUM; j++) {
-				if (maximal < doc[j].cosine && doc[j].dirty_bit == 0) {
-					maximal = doc[j].cosine;
-					top[i] = j;
-				}
-			}
-			// set dirty bit
-			doc[top[i]].dirty_bit = 1;
-		}
+		generateTop(doc, top);
 
 		//if relevance feeback is specified
 		if (relevance_feedback) {
@@ -508,6 +575,8 @@ int main(int argc, char** argv) {
 			for (i = 0; i < RELE_DOC_NUM; i++) {
 				p1 = 0;
 				p2 = 0;
+
+				// count relevance_doc_vector
 				// find same terms that appear both in query and its top <RELE_DOC_NUM> documents
 				while (p1 < doc[top[i]].current_term && p2 < query[q].current_term) {
 					if (doc[top[i]].term[p1].vocab1 > query[q].term[p2].vocab1)
@@ -537,7 +606,7 @@ int main(int argc, char** argv) {
 			for (i = 0; i < DOC_NUM; i++) {
 				p1 = 0;
 				p2 = 0;
-				doc[i].similarity = 0;
+				doc[i].dot_product = 0;
 				doc[i].cosine_amount1 = 0;
 				doc[i].cosine_amount2 = 0;
 				doc[i].dirty_bit = 0;
@@ -556,58 +625,33 @@ int main(int argc, char** argv) {
 						// 	p2++;
 						// }
 						else {
-							doc[i].similarity += count_relevance_feedback_similarity(doc[i].term[p1].weight, query[q].term[p2].tf, query[q].term[p2].relevance_doc_vector);
+							doc[i].dot_product += count_relevance_feedback_dot_product(doc[i].term[p1].weight, query[q].term[p2].tf, query[q].term[p2].relevance_doc_vector);
 							p1++;
 							p2++;
 						}
 					}
 				}
-				p1 = 0;
-				p2 = 0;
-				while (p1 < doc[i].current_term) {
-					if (doc[i].term[p1].vocab2 != -1) {
-						doc[i].cosine_amount1 += doc[i].term[p1].weight * doc[i].term[p1].weight;
-					}
-					p1++;
-				}
-				while (p2 < query[q].current_term) {
-					if (query[q].term[p2].vocab2 != -1) {
-						doc[i].cosine_amount2 += query[q].term[p2].tf * query[q].term[p2].tf;
-					}
-					p2++;
-				}
-				if (doc[i].cosine_amount1 != 0 && doc[i].cosine_amount2 != 0)
-					doc[i].cosine = count_cosine(doc[i].similarity, doc[i].cosine_amount1, doc[i].cosine_amount2);
-				else
-					doc[i].cosine = 0;
+				// count cosine similarity of document i to query q
+				do_cosine(doc, query, i, q, 0);
 			}
 
 			// generate top 100 anwser for each query//
-			for (i = 0; i < 100; i++) {
-				maximal = 0;
-				for (j = 0; j < DOC_NUM; j++) {
-					if (maximal < doc[j].cosine && doc[j].dirty_bit == 0) {
-						maximal = doc[j].cosine;
-						top[i] = j;
-					}
-				}
-				doc[top[i]].dirty_bit = 1;
-			}
+			generateTop(doc, top);
 		}
 
-		wprintf(L" query: %ls\n", query[q].doc_ID);
 		// print top100 into output
 		for (i = 0; i < 100; i++) {
 			fwprintf(output_file_fp, L"%ls ", &query[q].doc_ID[14]);
-			//wprintf(L"%d, %ls similarity:%lf,cosine:%lf\n",i+1,doc[top[i]].doc_ID,doc[top[i]].similarity,doc[top[i]].cosine);
+			//wprintf(L"%d, %ls dot_product:%lf,cosine:%lf\n",i+1,doc[top[i]].doc_ID,doc[top[i]].dot_product,doc[top[i]].cosine);
 			for (j = 0; j < wcslen(doc[top[i]].doc_ID); j++) {
 				doc[top[i]].doc_ID[j] = towlower(doc[top[i]].doc_ID[j]);
 			}
 			fwprintf(output_file_fp, L"%ls\n", &doc[top[i]].doc_ID[16]);
 		}
+		wprintf(L" %ls finish\n", query[q].doc_ID);
 	}
 	fclose(output_file_fp);
-	printf("\r [O] Calculate similarity with relevance feedback\n");
+	printf("\r [O] Calculate dot_product with relevance feedback\n");
 
 	return 0;
 } 
