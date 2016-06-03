@@ -1,6 +1,10 @@
 import sys
 import os
 import re
+from math import log
+
+# global parameter
+SMOOTHING = 0.01
 
 # parse arguments
 
@@ -62,10 +66,21 @@ def removeUseless(str):
 	#symbol = ['.', '<', '>', '@', ':', '(', ')', '"', ',', '_', '-', '/', '\\', '^', '?', '[', ']', ';', '*', '|', '{', '}', '+', '=', '&', '%', '$', '#', '!', '~', '`']
 	
 	# find all vocabularies
-	vocab = re.findall('[a-zA-Z]', str)
+	vocab = re.findall('[a-zA-Z]+', str)
 	str = ''.join([i for i in vocab])
 	str = str.lower()
 	return str
+
+def removeUselessContent(content):
+	content = content.split()
+	for i in range(0, len(content)):
+		vocab = re.findall('[a-zA-Z]+', content[i])
+		content[i] = ''.join([k for k in vocab])
+		content[i] = content[i].lower()
+	# content = re.findall('[a-zA-Z]+', content)
+	# for i in range(0, len(content)):
+	# 	content[i] = content[i].lower()
+	return content
 
 def removeUselessWord(dictionary):
 	useless = []
@@ -87,23 +102,19 @@ for topic in Topic:
 	wordCount[topic]['words'] = {}
 	for filename in Train[topic]:
 		content = open(filename, 'r').read()
-		#content = content.split()
-		terms = re.findall('[a-zA-Z]+', content)
-		for term in terms:
-			#term = removeUseless(term)
-			term = term.lower()
+		content = removeUselessContent(content)
+		for term in content:
 			if term not in wordCount[topic]['words']:
 				wordCount[topic]['words'][term] = 1
 			else:
 				wordCount[topic]['words'][term] += 1
-	wordCount[topic]['words'] = removeUselessWord(wordCount[topic]['words'])
+	#wordCount[topic]['words'] = removeUselessWord(wordCount[topic]['words'])
 	wordCount[topic]['unique_length'] = len(wordCount[topic]['words'].keys())
 	for key in wordCount[topic]['words']:
 		if key not in Terms:
 			Terms.append(key)
 		wordCount[topic]['length'] += wordCount[topic]['words'][key]
-		# print topic, key, wordCount[topic]['words'][key]
-	print topic, "length:"+wordCount[topic]['length'], "uni word:"+wordCount[topic]['unique_length'], "Terms:"+len(Terms)
+	print topic, wordCount[topic]['length'], wordCount[topic]['unique_length'], len(Terms)
 
 
 # naive Bayes
@@ -118,14 +129,15 @@ def wordProbability(word, topic):
 	if word in wordCount[topic]['words']:
 		wordInTopic = wordCount[topic]['words'][word]
 	topicLength = wordCount[topic]['length']
-	return float(0.2+wordInTopic) / float(0.2*len(Terms)+topicLength)
+	#print word, float(0.2+wordInTopic), "/", float(0.2*len(Terms)+topicLength), float(0.2+wordInTopic) / float(0.2*len(Terms)+topicLength)
+	return float(SMOOTHING+wordInTopic) / float(SMOOTHING*len(Terms)+topicLength)
 
 def countTopicProbability(topic, content):
-	topic_P = topicPriorProbability(topic)
-	probability_pi = 1
+	topic_P = log(topicPriorProbability(topic))
+	probability_pi = 0
 	for word in content:
-		probability_pi *= wordProbability(word, topic)
-	return topic_P * probability_pi
+		probability_pi += log(wordProbability(word, topic))
+	return topic_P + probability_pi
 
 def findMax(dictionary):
 	maxKey = ''
@@ -141,12 +153,7 @@ maxData = {}
 
 for filename in Test:
 	content = open(filename, 'r').read()
-	terms = re.findall('[a-zA-Z]+', content)
-	for i in range(0, len(terms)):
-		terms[i] = terms[i].lower()
-		
-	# for i in range(0, len(content), 1):
-	# 	content[i] = removeUseless(content[i])
+	content = removeUselessContent(content)
 	topicProbability = {}
 	for topic in Topic:
 		topicProbability[topic] = countTopicProbability(topic, content)
