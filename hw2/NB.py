@@ -4,14 +4,14 @@ import re
 from math import log
 
 # global parameter
-SMOOTHING = 0.01
+SMOOTHING = 0.027
 
 # parse arguments
 
 arguments = sys.argv
 directory = ''
 output = ''
-labeled = None
+labeled = 1
 
 if '-i' in arguments:
 	directory = arguments[arguments.index('-i')+1]
@@ -20,7 +20,7 @@ if '-o' in arguments:
 	output = arguments[arguments.index('-o')+1]
 
 if '-n' in arguments:
-	labeled = arguments[arguments.index('-n')+1]
+	labeled = int(arguments[arguments.index('-n')+1])
 
 print "Arguments:", directory, output, labeled
 
@@ -77,6 +77,8 @@ def removeUselessContent(content):
 		vocab = re.findall('[a-zA-Z]+', content[i])
 		content[i] = ''.join([k for k in vocab])
 		content[i] = content[i].lower()
+	if '' in content:
+		content.remove('')
 	# content = re.findall('[a-zA-Z]+', content)
 	# for i in range(0, len(content)):
 	# 	content[i] = content[i].lower()
@@ -100,6 +102,7 @@ for topic in Topic:
 	wordCount[topic]['length'] = 0
 	wordCount[topic]['unique_length'] = 0
 	wordCount[topic]['words'] = {}
+	topicCount = 0
 	for filename in Train[topic]:
 		content = open(filename, 'r').read()
 		content = removeUselessContent(content)
@@ -108,6 +111,9 @@ for topic in Topic:
 				wordCount[topic]['words'][term] = 1
 			else:
 				wordCount[topic]['words'][term] += 1
+		topicCount += 1
+		if topicCount >= labeled:
+			break
 	#wordCount[topic]['words'] = removeUselessWord(wordCount[topic]['words'])
 	wordCount[topic]['unique_length'] = len(wordCount[topic]['words'].keys())
 	for key in wordCount[topic]['words']:
@@ -158,11 +164,15 @@ for filename in Test:
 	for topic in Topic:
 		topicProbability[topic] = countTopicProbability(topic, content)
 	maxTopic = findMax(topicProbability)
-	maxData[int(filename.split('/')[2])] = maxTopic
+	_file = filename.split('/')
+	maxData[int(_file[len(_file)-1])] = maxTopic
 
 sorted(maxData)
 
 for key in maxData:
 	output_file.write(str(key) + ' ' + maxData[key] + '\n')
-
 output_file.close()
+
+with open(output, 'rb+') as filehandle:
+    filehandle.seek(-1, os.SEEK_END)
+    filehandle.truncate()

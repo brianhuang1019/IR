@@ -4,7 +4,7 @@ import re
 from math import log
 
 # global parameter
-SMOOTHING = 0.025
+SMOOTHING = 0.027
 
 # parse arguments
 
@@ -205,7 +205,6 @@ def countAccuracy(maxData):
 	return accuracy
 
 def converge(accuracy_prev, accuracy_cur):
-	print accuracy_prev, accuracy_cur
 	if accuracy_cur == accuracy_prev:
 		return True
 	else:
@@ -220,24 +219,28 @@ for filename in Test:
 	for topic in Topic:
 		topicProbability[topic] = countTopicProbability(topic, wordCountFile[filename]['content'])
 	maxTopic = findMax(topicProbability)
-	maxData[int(filename.split('/')[2])] = maxTopic
+	_file = filename.split('/')
+	maxData[int(_file[len(_file)-1])] = maxTopic
 	wordCountFile[filename]['topic'] = maxTopic
 	for term in wordCountFile[filename]['content']:
+		# To slow, so skip it
 		# if term not in Terms:
 		# 	Terms.append(term)
 		if term not in wordCountFile[filename]['words']:
 			wordCountFile[filename]['words'][term] = 1
 		else:
 			wordCountFile[filename]['words'][term] += 1
+	# To slow, so skip it
 	# for term in wordCountFile[filename]['words']:
 	# 	if term not in Terms:
 	# 		Terms.append(term)
 	print "Parse", filename, "finished."
 print "Parse Unlabeled finished."
-wordCountPrime = addToModel(wordCountFile, wordCountPrime)
-accuracy_prev = countAccuracy(maxData)
 
 # EM algorithm
+print "Start EM."
+wordCountPrime = addToModel(wordCountFile, wordCountPrime)
+accuracy_prev = countAccuracy(maxData)
 while True:
 	accuracy = 0
 	_round += 1
@@ -248,7 +251,8 @@ while True:
 			topicProbability[topic] = countTopicProbability(topic, wordCountFile[filename]['content'])
 		maxTopic = findMax(topicProbability)
 		wordCountFile[filename]['topic'] = maxTopic
-		maxData[int(filename.split('/')[2])] = maxTopic
+		_file = filename.split('/')
+		maxData[int(_file[len(_file)-1])] = maxTopic
 	accuracy_cur = countAccuracy(maxData)
 	if converge(accuracy_prev, accuracy_cur):
 		break
@@ -262,5 +266,8 @@ sorted(maxData)
 output_file = open(output, 'w')
 for key in maxData:
 	output_file.write(str(key) + ' ' + maxData[key] + '\n')
-
 output_file.close()
+
+with open(output, 'rb+') as filehandle:
+    filehandle.seek(-1, os.SEEK_END)
+    filehandle.truncate()
